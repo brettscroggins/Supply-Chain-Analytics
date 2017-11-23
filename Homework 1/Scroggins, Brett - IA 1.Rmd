@@ -1,0 +1,220 @@
+---
+title: "Supply Chain HW I1"
+author: "Brett Scroggins"
+date: "Due: 11/7/2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=TRUE, message=FALSE, warning=FALSE}
+library(fpp)
+library(dplyr)
+```
+
+```{r}
+RS = read.csv('/Users/brettscroggins/Downloads/RSGCSN.csv') %>%
+  select(-DATE) %>%
+  ts(start=c(1992,1), frequency=12)
+
+tr = window(RS, end=c(2011,12))
+te = window(RS, start=c(2012,1))
+plot(RS)
+abline(v=c(2011,12), col='grey')
+```
+
+# Question 1
+
+```{r}
+f.HW = ets(tr, model="AAM", restrict = FALSE)
+summary(f.HW)
+
+fc.HW = forecast(f.HW, h = 68)
+plot(fc.HW)
+points(te, col='red', pch=19)
+
+plot(fc.HW, xlim=c(2009,2018), ylim=c(40000,60000))
+points(te, col='red', pch=19)
+
+accuracy(fc.HW, te)
+```
+
+### Question 1
+Based on your analysis above, discuss the forecast bias and compare the out-of-sample MAE with the MAE that you would obtain if you used the naïve forecasting method.  What do you think is driving the poor model performance?  Examine carefully the MAE of the naïve forecasting method over the 68-month-ahead forecasting horizon.  Which model/method would you choose for forecasting?
+
+### Solution
+### Based on the MASE score of Holt-Winters model (0.407), this seems to be a much more effective forecast than a naive one as its score is lower than 1. However, when using this to predict the testing set, a MASE of 1.322 is produced meaning that it is not more effective. If this prediction were just for the first couple years, it may be effective, but as this model damps and the data does not follow that trend, a 68 month forecase with this model is not effective.
+
+# Question 2
+
+```{r}
+f.HW2 = ets(tr, model="AAM", damped = FALSE, restrict = FALSE)
+summary(f.HW2)
+
+fc.HW2 = forecast(f.HW2, h = 68)
+plot(fc.HW2, xlim=c(2009,2018), ylim=c(40000,60000))
+points(te, col='red', pch=19)
+
+accuracy(fc.HW2, te)
+```
+
+### Question 2
+Based on your analysis above, discuss the forecast bias and compare the out-of-sample MAE of fc.HW, fc.HW2 and the naïve forecast?  Discuss also the confidence interval cone of both models.  What do you suspect is making the cone of fc.HW2 much larger?  Which of the models analyzed thus far would you choose for forecasting?  Why?
+
+### Solution
+### When looking to compare the two models to a naive forecast, only the fc.HW2 set out-performce a naive forecast as its MASE is less than 1. Thus, as would be expected, the MAE of the fc.HW2 is lower than fc.HW yielding that it would be a more accurate forecast to use.
+### When comparing the cone size of fc.HW and fc.HW2, it is clear to see that fc.HW2 has a much larger confidence interval cone. This can be attributed to the forecast being damped on fc.HW, while it is not damped on fc.HW2
+### Currently, the choice of forecasting should be Holt-Winters model with damping, fc.HW2.
+
+# Question 3
+
+```{r}
+f.O = ets(tr, model="ZZZ", restrict = FALSE)
+summary(f.O)
+
+fc.O = forecast(f.O, h = 68)
+plot(fc.O, xlim=c(2009,2018), ylim=c(40000,60000))
+points(te, col='red', pch=19)
+
+accuracy(fc.O, te)
+```
+
+### Question 3
+Compare the out-of-sample MAE of fc.HW, fc.HW2, fc.O and the naïve forecast?  Compare the AICc and BIC of models f.HW, f.HW2 and f.O. Which of the models analyzed thus far would you choose for forecasting? Why?
+
+### Solution
+### Similarly to above, utilizing the MAE of the test data to compare models shows that the fc.O - which yielded a MAA model - gives the lowest MAE (670.84) of the entire group so far.
+### When looking at the AICc and BIC of models, it is again clear that the MAA model fitted to fc.O produced the best results for both of these measures.
+### Based on all results above, it is within our best interest to go with the fc.O model at this point.
+
+# Question 4
+
+```{r}
+L = BoxCox.lambda(tr)
+z = BoxCox(tr, L)
+
+fB.O = ets(tr, model="ZZZ", restrict = FALSE, lambda = L)
+summary(fB.O)
+
+fBc.O = forecast(fB.O, h = 68)
+plot(fBc.O, xlim=c(2009,2018), ylim=c(40000,60000))
+points(te, col='red', pch=19)
+
+accuracy(fBc.O, te)
+```
+
+### Question 4
+
+Compare the in-sample and out-of-sample MAE of fBc.O, fc.O and the naïve forecast? Which of the models analyzed thus far would you choose for forecasting? Why?
+
+### Solution
+### When comparing in-sample MAE of these two models, it looks like that best forecasting choice is the Box Cox model as it has a much lower MAE. However, when looking at the testing data, the reverse is actually the case as the previous fc.O model is better at predicting. Additionally, while the fc.O is a better predicting forecast than a naive one, the fBc.O model is not. This is indicated with the output of a MASE score of greater than 1.
+### While fBc.O initially may be thought of as the better choice, upon further checking, it is still a better prediction to go with the fc.O model from Part 3.
+
+# Question 5
+
+```{r}
+fB.OD = ets(tr, model="ZZZ", damped = TRUE, restrict = FALSE, lambda = L)
+summary(fB.OD)
+
+fBc.OD = forecast(fB.OD, h = 68)
+plot(fBc.OD, xlim=c(2009,2018), ylim=c(40000,60000))
+points(te, col='red', pch=19)
+
+accuracy(fBc.OD, te)
+```
+
+### Question 5
+
+Compare the in-sample and out-of-sample MAE of fBc.OD, fBc.O, fc.O and the naïve forecast? Why do you think the damping constant is not helping? Which of these three models would you choose for forecasting?
+
+### Solution
+### As can be seen above with the graph and output, the fBc.OD model that added damping from the previous one is clearly not the best choice here. With a MASE of much more than one and a graph that shows a clear non-prediction, this is not the model to use.
+### As before, the best model at this point is still the fc.O model.
+
+# Question 6
+
+```{r}
+rmse = 1E8
+year = NULL
+
+for (i in 1992:2006){
+  
+  tr2 = window(RS, start=c(i,1), end=c(2011,12))
+  L = BoxCox.lambda(tr2)
+  f.loop = ets(tr2, model="ZZZ", restrict = FALSE, lambda = L)
+  temp_year = i
+  temp_rmse = accuracy(f.loop)[2]
+  
+  if (temp_rmse < rmse){
+    rmse = temp_rmse
+    year = temp_year
+  }
+}
+print(year)
+print(rmse)
+
+trr = window(RS, start=c(2003,1), end=c(2011,12))
+```
+
+### Question 6
+
+Explain why we cannot use the AICc or BIC criteria to select the best starting year for the training data set in the procedure described above.
+
+### Solution
+### We cannot use the AICc or BIC criteria because we are using different data sets to predict. In order for these two measures to be comparable, the same set must be used, and as we are looping through to find the best fit, no trial will have the same size training set.
+
+# Question 7
+
+```{r}
+L = BoxCox.lambda(trr)
+z = BoxCox(trr, L)
+
+f = ets(trr, model="ZZZ", restrict = FALSE, lambda = L)
+summary(f)
+
+fc = forecast(f, h = 68)
+plot(fc, xlim=c(2009,2018), ylim=c(40000,60000))
+points(te, col='red', pch=19)
+
+accuracy(fc, te)
+```
+
+### Question 7
+
+- Is the in-sample AICc for model f.O comparable with the in-sample  AICc for model f? Explain.
+
+- Is the in-sample MASE for model f.O comparable with the in-sample MASE for model f?  Explain.
+
+- Is the out-of-sample RMSE for model fc.O comparable with the out-of-sample RMSE for model fc?  Explain.  Is the fc forecast truly an out-of-sample forecast? Explain
+
+### Solutions
+### - No, as stated previously, the AICc for f.O and for f when looking at in-sample cannot be compared as their data sets are not the same size. This is due to the starting point for f.O being the ideal starting point, 2003, while fc.O starts in 1992.
+### - No, the MASE is not comparable. While the MASE for both models compare then with a naive forecast, the output of these is not a comparable factor. This number shows only if the model in question, f.O and fc.O, is a better prediction than the naive forecast. Both are better here, but that is all that can be said.
+### - Yes, the out of sample RMSE is comparable for these models. The RMSE measures the prediction of the model on the testing set, and as both use the same testing set, this is a good metric to determine which model does the best job forecasting - in this case it was the fc model with had the lowest out-of-sample RMSE of 627.46.
+
+# Question 8
+
+```{r}
+trrr = window(RS, start=c(2003,1), end=c(2017,8))
+
+ff = ets(trrr, model="MAA", restrict = FALSE)
+summary(ff)
+
+ffc = forecast(ff, h = 64)
+plot(ffc)
+
+accuracy(ffc)
+```
+
+### Question 8
+
+- Compare the in-sample fit statistics of ff with those of model f.
+
+- Based on your analysis what would you estimate the out-of-sample (i.e., the actual) MAPE be over the next five years?  How about the out-of-sample (actual) RMSE?
+
+### Solution
+### When trying to compare ff and f, it is useful to compare MAPE as it gives a percentage of the mean error. What can be seen here is how well the model fits the current data, and it shows that model f, does a slightly better job with the data. However, when trying to predict 5 years into the future, the model ff will be used because it accounts for more of the data, and contains the most current data.
+### Based on the summary of this last model, I would estimate that the MAPE will be slightly lower than 1 over then next five years, and the RMSE would be about 500 - 600 as the prediction goes. If this were to continue into a longer period of time out, I would expect both to slowly get worse as the prediction is not as current, but predicting in for 5 years out should follow a similar path that Question 7 did.
