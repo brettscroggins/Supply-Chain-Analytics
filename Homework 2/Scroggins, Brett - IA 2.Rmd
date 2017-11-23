@@ -1,0 +1,291 @@
+---
+title: "Supply Chain HW I2"
+author: "Brett Scroggins"
+date: "Due: 11/21/2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=TRUE, message=FALSE, warning=FALSE}
+library(fpp)
+library(dplyr)
+```
+
+```{r}
+PG <- read.csv("/Users/brettscroggins/Downloads/IPG2211N.csv") %>%
+  select(-DATE) %>%
+  ts(start=c(1972,1), frequency=12)
+
+PG1.tr <- window(PG, end=c(1995,12))
+PG1.te <- window(PG, start=c(1996,1), end=c(2000,12))
+```
+
+
+
+# Question 1
+
+```{r}
+# BoxCox Lambda for PG1
+L = BoxCox.lambda(PG1.tr)
+L
+```
+
+## Part B
+```{r}
+# d = 2
+tsdisplay(diff(BoxCox(PG1.tr,L)), lag=48)
+```
+
+## Part C
+```{r}
+# D = 1
+seasonal_PG1.tr = diff(BoxCox(PG1.tr,L),12)
+tsdisplay(seasonal_PG1.tr, lag=48)
+```
+
+## Part D
+```{r}
+# d = 1, D = 1
+both_PG1.tr = diff(seasonal_PG1.tr)
+tsdisplay(both_PG1.tr, lag=48)
+```
+
+## Part E
+```{r}
+# adf test
+adf.test(both_PG1.tr)
+```
+### What do you conclude from the test?
+
+### Solution
+What can be seen from this test is that we must reject the null hypothesis that this is a stationary time series. The p-value returned is significant and therefore allows us to say this this is not a stationary series.
+
+## Part F
+If you were to fit an ARIMA model to each of the (three) differenced series you obtained above, what would be the maximum order of the (p,d,q) (P,D,Q)_12  model in each case? (i.e., what is the maximum values of p,P,q  and Q for each of the value combinations of d and D?) 
+
+### Solution
+- From the non-seasonally differenced model when d = 1: 
+    p = 5, q = 3, P = 1, Q = 4
+- From the seasonally difference model when D = 1:
+    p = 2, q = 7, P = 1, Q = 1
+- From the model with both non-seasonal difference (d = 1) and seasonal difference (D = 1):
+    p = 2, q = 2, P = 3, Q = 4
+
+
+
+# Question 2
+
+## Part A
+```{r}
+# auto arima
+auto_arima = auto.arima(PG1.tr, lambda = L)
+summary(auto_arima)
+```
+
+## Part B
+```{r}
+# tsdiag from Problem 1
+tsdiag(auto_arima, gof.lag = 24)
+```
+
+## Part C
+```{r}
+# 60 month forecast
+forecast_60months = forecast(auto_arima, h = 60)
+plot(forecast_60months,xlim=c(1990,2001),ylim=c(60,140))
+lines(PG1.te, col='red')
+```
+
+## Part D
+```{r}
+# forecast accuracy
+accuracy(forecast_60months, PG1.te)
+```
+
+### Based on the visual inspection of the forecast plot and the out-of-sample fit statistics comment on the forecast bias.
+
+### Solution
+Based on the graph, we can see that the prediction is slightly below the blue testing line. With this, and seeing that the ME grows significantly from training to testing set, it can be see that the projection is more bias towards smaller growth than what is actual.
+
+
+
+# Question 3
+
+## Part A
+```{r}
+# manual arima for seasonal
+P3_arima = auto.arima(seasonal_PG1.tr, d=0, D=1, max.p = 2, max.q = 6, max.P = 1, max.Q = 1)
+summary(P3_arima)
+```
+## Part B
+
+### How do your model compares with the one found by auto.arima(…)?
+
+### Solution
+When comparing models based on AICc and BIC, it is clear that the model fit in Question 3 with the paramaters found above outperforms the auto.arima() model found in Question 2. Going foreward, this is our best model so far.
+
+
+
+# Question 4
+
+## Part A
+```{r}
+# manual arima for non-seasonal
+P4_arima = auto.arima(diff(BoxCox(PG1.tr,L)), d=1, D=0, max.p = 5, max.q = 3, max.P = 1, max.Q = 4)
+summary(P4_arima)
+```
+## Part B
+### How do your model compares with the ones found in Questions 2 and 3?
+
+### Solution
+When comparing the three models so far, looking at AICc and BIC, it is clear that the model fit in Question 4, our projection with a non-seasonal difference, with the paramaters found above outperforms the auto.arima() model found in Question 2 and the seasonally differenced model found in Question 3. Going foreward, this is our best model that we have found thus far.
+
+
+
+# Question 5
+
+```{r}
+PG2.tr <- window(PG, end=c(2011,12))
+PG2.te <- window(PG, start=c(2012,1))
+```
+
+## Part A
+```{r}
+# BoxCox for PG2
+L2 = BoxCox.lambda(PG2.tr)
+L2
+```
+
+## Part B
+```{r}
+# Both differenced
+both_PG2.tr = diff(diff(BoxCox(PG2.tr,L2),12))
+adf.test(both_PG2.tr)
+```
+### What do you conclude from the test?
+
+### Solution
+What can be seen from this test is that we must reject the null hypothesis that this is a stationary time series. The p-value returned is significant and therefore allows us to say this this is not a stationary series.
+
+## Part C
+```{r}
+# Values of p, q, P, and Q
+tsdisplay(both_PG2.tr,lag=48)
+## p = 3, q = 3, P = 4, Q = 2
+```
+###	If you were to fit an ARIMA model to the time series you obtained above, what would be the maximum order of the (p,1,q) (P,1,Q)_12  model? (i.e., what is the maximum values of p,P,q  and Q?)
+
+### Solution
+Given that we are differencing both seasonally and non-seasonally (d = 1 and D = 1), the max values of the remain ARIMA parameters are:
+ - p = 3, q = 3, P = 4, and Q = 2
+
+
+
+# Question 6
+
+## Part A
+```{r}
+# Auto arima for PG2
+auto_arima2 = auto.arima(PG2.tr, lambda = L2)
+summary(auto_arima2)
+```
+
+## Part B
+```{r}
+# Residual of PG2
+tsdiag(auto_arima2)
+```
+
+## Part C
+```{r}
+# 2nd forecast
+forecast_69months = forecast(auto_arima2, h = 69)
+plot(forecast_69months, xlim=c(2000,2018), ylim=c(60,140))
+lines(PG2.te, col='red')
+```
+
+## Part D
+```{r}
+# Check accuracy
+accuracy(forecast_69months, PG2.te)
+```
+
+### Based on the visual inspection of the forecast plot and the out-of-sample fit statistics comment on the forecast bias. 
+
+### Solution
+Similar to the previous forecast, we can see that the prediction is again below the blue testing line. With this, and seeing that the ME again grows from training to testing set, it can be see that the projection is more bias towards smaller growth than what is actual.
+
+
+
+# Question 7
+
+## Part A
+```{r}
+PG3.tr <- window(PG, start=c(2005,1), end=c(2011,12))
+L3 = BoxCox.lambda(PG3.tr)
+L3
+```
+
+## Part B
+```{r}
+# Auto arima
+auto_arima3 =  auto.arima(PG3.tr,lambda=L3)
+summary(auto_arima3)
+```
+
+## Part C
+```{r}
+# Residuals of arima 3
+tsdiag(auto_arima3)
+```
+
+## Part D
+```{r}
+# Create best model
+best_arima = auto.arima(PG3.tr, max.d=2, max.D=2, max.p = 1, max.q = 1, max.P = 2, max.Q = 1)
+summary(best_arima)
+```
+
+## Part E
+```{r}
+# Best fit model forecast
+best_forecast = forecast(best_arima, h = 69)
+plot(best_forecast, xlim=c(2000,2018), ylim=c(60,140))
+lines(PG2.te, col='red')
+accuracy(best_forecast, PG2.te)
+```
+
+## Part F
+
+### Based on the visual inspection of the forecast plot and the out-of-sample fit statistics comment on the forecast bias.
+
+### Solution
+What can be seen here is that the best forecast is fitting the testing data very similarly to the training set. The RMSE is around the same for both of these, plus the bias is not as large as in previous models. This forecast is a slight over-approxiamation of the data as can be seen by the prediction line that is slightly higher than the testing data.
+
+## Part G
+
+### Compare the best model you obtained for the PG3.tr training set (this question) with the model you obtained for PG2.tr training set (Question 6) and comment on their out-of-sample fit statistics.  Explain why you cannot compare the AICc and BIC of both models?  
+
+### Solution
+This model seems to have the best fit in both in and out of sample statistics. It produced the lowest AICc and BIC for our data, and therefore will be used in the next question as the best-fitting prediction model to forecast out.
+
+
+
+# Question 8
+
+## Part A
+```{r}
+PG.tr <- window(PG, start=c(2005,1))
+```
+
+## Part B
+```{r}
+# Arima to project the next 63 months
+best_arima_fit = arima(PG.tr, order = c(0,0,1), seasonal=c(2,1,1))
+summary(best_arima_fit)
+final_forecast = forecast(best_arima_fit, h = 63)
+plot(final_forecast, xlim=c(2005,2023), ylim=c(60,140))
+```
