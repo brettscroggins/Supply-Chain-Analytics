@@ -1,0 +1,210 @@
+---
+title: "Supply Chain HW I3"
+author: "Brett Scroggins"
+date: "Due: 11/29/2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+library(fpp)
+library(reshape)
+library(dplyr)
+library(glmnet)
+
+#
+PBS <- read.csv("/Users/brettscroggins/Downloads/Peanut Butter Chicago.csv")[,-1] %>% 
+  mutate( F_LSA=ifelse(F=="A",1,0),   # Large Size Ad Dummy
+          F_MSA=ifelse(F=="B",1,0),   # Medium Size Ad Dummy
+          F_SSA=ifelse(F=="C",1,0),   # Small Size Ad Dummy
+          D_MIN=ifelse(D==1,1,0),     # Minor In-Store Display Dummy
+          D_MAJ=ifelse(D==2,1,0)) %>% # Major In-Store Display Dummy
+  # Promotional variables are weighted by sales volume (oz)
+  mutate(S_LB = UNITS * VOL_EQ,
+         WF_LSA = F_LSA * UNITS * VOL_EQ,     # Large Size Ad Weighted
+         WF_MSA = F_MSA * UNITS * VOL_EQ,     # Medium Size Ad Weighted
+         WF_SSA = F_SSA * UNITS * VOL_EQ,     # Small Size Ad Weighted
+         WD_MIN = D_MIN * UNITS * VOL_EQ,     # Minor In-Store Display Weighted
+         WD_MAJ = D_MAJ * UNITS * VOL_EQ) %>% # Major In-Store Display Weighted
+  mutate(VEND =ifelse(VEND == 48001,"SK",ifelse( VEND == 99998,"PL","OB"))) %>%
+  select(-F, -D)
+
+# Create aggregate variables by product-week
+x.pw <- group_by(PBS, WEEK, VEND) %>% 
+  summarise(S.DOLLARS = sum(DOLLARS),      # Total $ Sales 
+            S.S_LB    = sum(S_LB),         # Total L. Sales
+            S.WF_LSA  = sum(WF_LSA),       # Total Weighted Large Ad
+            S.WF_MSA  = sum(WF_MSA),       # Total Weighted Medium Ad
+            S.WF_SSA  = sum(WF_SSA),       # Total Weighted Small Ad
+            S.WD_MIN  = sum(WD_MIN),       # Total Weighted Minor Store Disp
+            S.WD_MAJ  = sum(WD_MAJ)) %>%   # Total Weighted Major Store Disp
+  # Calculate weigted averages of Advertising and Promotion variables
+  mutate(A.PPU = log(S.DOLLARS / S.S_LB),  # Avg. Price per unit (pound)
+         S.WF_LSA  = S.WF_LSA / S.S_LB,    # Avg. Weighted Large Ad
+         S.WF_MSA  = S.WF_MSA / S.S_LB,    # Avg. Weighted Medium Ad
+         S.WF_SSA  = S.WF_SSA / S.S_LB,    # Avg. Weighted Small Ad
+         S.WD_MIN  = S.WD_MIN / S.S_LB,    # Avg. Weighted Minor Store Disp
+         S.WD_MAJ  = S.WD_MAJ / S.S_LB)    # Avg. Weighted Major Store Disp
+#
+
+
+xmat <- x.pw %>%
+  mutate(LS  = log(S.S_LB)) %>% 
+  select(-S.DOLLARS, -S.S_LB)
+#
+# Creeate separate columns for vars of each brand group
+xmat <- data.frame(filter(xmat, VEND == "SK"),
+                   filter(xmat, VEND == "OB"),
+                   filter(xmat, VEND == "PL")) %>%
+  select(-WEEK, -WEEK.1, -WEEK.2, 
+         -VEND, -VEND.1, -VEND.2, 
+         -LS.1, -LS.2) # After droping vars. you should have 19 vars left
+
+#
+xm <- model.matrix(LS ~., data=xmat)[,-1]
+y <- xmat[,"LS"]
+#
+```
+
+
+
+# Question 1
+
+```{r}
+x_train <- xm[1:94,]
+y_train <- y[1:94]
+x_test <- xm[95:104,]
+y_test <- y[95:104]
+
+
+set.seed(1)
+grid = 10^seq(10,-2,length = 100)
+cv_lasso = cv.glmnet(x_train, y_train, alpha=1, lambda=grid,
+                     thresh = 1e-12,nfolds=10, type.measure = "mse")
+
+min_lambda = cv_lasso$lambda.min
+lasso_model = glmnet(x_train, y_train, alpha=1,
+                     lambda = min_lambda, thresh=1e-12)
+
+predict(lasso_model, s=min_lambda, type="coefficients")
+```
+
+
+
+# Question 2
+
+```{r}
+reduced_x_train = data.frame(x_train[,c('S.WD_MIN', 'A.PPU')])
+reduced_x_test = data.frame(x_test[,c('S.WD_MIN', 'A.PPU')])
+reduced_model = lm(y_train~., data = reduced_x_train)
+summary(reduced_model)
+
+reduced_residuals = residuals(reduced_model)
+Acf(reduced_residuals)
+```
+
+## Comments on the fit of the model and examine the auto-correlations of the residuals of this model.
+
+### Solution
+After utilizing the LASSO to reduce variables, the model fit was done and fits the data well. There are no significant auto-correlations past the expected zero time residual, and therefore shows that it is an effective model. This model output an 84% fit and had significant variables.
+
+
+
+# Question 3
+
+```{r}
+auto_arima = auto.arima(y_train)
+summary(auto_arima)
+
+tsdiag(auto_arima)
+```
+
+## Comments on the model’s validity.
+
+### Solution
+In this model, the data is fit well and outputs an MASE under one (0.726) and therefore outperforms a naive forecast. This yields that this is a good predictor to use as a forecast going foreward.
+
+
+
+# Question 4
+
+```{r}
+aa_forecast = forecast(auto_arima, h=10)
+plot(aa_forecast)
+lines(x = seq(95,104), y = y_test, col='red')
+```
+
+## Comments on the usefulness of this model in terms of precision and confidence interval.
+
+### Solution
+What can be seen by this diagram is that this is not a great predictor of our testing set. This could be from the fact that the testing set is a small sample, but going foreward this model would need to be adjusted prior to putting it into use.
+
+
+
+# Question 5
+
+```{r}
+reduced_arima = auto.arima(y_train, xreg = as.matrix(reduced_x_train))
+summary(reduced_arima)
+
+tsdiag(reduced_arima)
+```
+
+## Comments on its validity.
+
+### Solution
+Using our reduced x training set, the auto arima was fitted and produced a model that fits the data well. The MASE tells that this is a much better fit than a naive forecast and therefore should be tried as a model to predict the training set data to assess validity.
+
+
+
+# Question 6
+
+```{r}
+tsdisplay(arima.errors(reduced_arima))
+# p = 2, q = 2
+
+dynamic_reg = Arima(y_train, xreg = as.matrix(reduced_x_train),
+                    order = c(2,0,2))
+summary(dynamic_reg)
+```
+
+## Compare the coefficients of the explanatory variables in the Lasso model, unrestricted model of Question 2, and this model.
+
+### Solution
+When comparing all three models built so far, it seems that the dynamic regression built in this question fits the data better than the unrestricted model fit in Question 2 and the Lasso reduced model. The AICc and BIC are both lower when looking at the Lasso reduced model in compared to the dynamic regression, but the RMSE (which is applicable because both datasets are similar) and MASE are both lower, and these more descriptive statistics yield that this is a better model than the one with the reduced x training set.
+
+## B Notation of model obtained
+#### $\beta_0$ + $\beta_1*$S.WD_MIN + $\beta_{2}*$A.PPU
+#### $\beta_0$ = 6.9081
+#### $\beta_1$ = 0.3521
+#### $\beta_2$ = -2.5671
+#### Which equates to:
+#### 6.9081 + 0.3521 * S.WD_MIN - 2.5671 * A.PPU
+
+
+
+
+# Question 7
+
+```{r}
+aa_red_forecast = forecast(reduced_arima, xreg = as.matrix(reduced_x_test),h = 10)
+plot(aa_red_forecast)
+lines(x=seq(95,104), y=y_test, col = 'red')
+```
+
+## Comments on the usefulness of this model in terms of precision and confidence interval relative to the model without explanatory variables in Question 3.
+
+### Solution
+The model seems to be a much better fit that the previous forecast utilizing the Lasso reduced training set. The testing set falls within the confidence interval, although it is still not a perfect fit. Again, with a more robust training set, this could have been remedied, but as this data seems very sparatic, this may be the best fit that we have in this scenario.
+
+
+
+# Question 8
+
+## Comment on the training and testing fit statistics and discuss how do you think you could improve on the performance of the model in terms of (a) additional data, (b) different pre-processing of the existing data, and (c) different modeling choices.  Discuss your assessment of the potential for improvement (ex-ante priorities) for the different improvement options you suggest.
+
+### Solution
+The fit statistics for the best two models here seemed to perform very well on the training set, but did struggle when used to forecast the testing set. To better improve this fit, the first priority would be to collect more data. This could be beneficial to help train our model as long as the information in relevent and contributes to the model fitting. Next, as this data is quite volitile, additional computing time would be beneficial to hopefully fitting this better. Lastly, during pre-processing, it would potentially be beneficial to view sales differently instead of simply aggregating them, and that would be an area of exploration that could help our fit.
